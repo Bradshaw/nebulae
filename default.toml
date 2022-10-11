@@ -1,0 +1,10 @@
+limits = [
+    7740,
+    2580,
+    860,
+]
+iterations = 1000000
+passes = 100
+width = 2048
+height = 2048
+curve = 0.5
