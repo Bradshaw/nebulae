@@ -1,10 +1,15 @@
+# Iteration multiplier for each of the red, green, and blue channels
+# Must be an array of three integers
 limits = [
     7740,
     2580,
     860,
 ]
-iterations = 1000000
+# Number of random samples to take, per channel, per pass
+samples = 1000000
+# Number of passes to run
 passes = 100
-width = 2048
-height = 2048
+# Resolution of the rendered image (size × size pixels)
+size = 2048
+# Colour correction curve to apply (value between 0 and 1, raised to this power)
 curve = 0.5

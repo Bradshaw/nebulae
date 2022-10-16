@@ -11,21 +11,26 @@ use std::{fmt, fs, thread};
 /// Configuration Settings for the main function
 #[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct RenderSettings {
+    /// Iteration multiplier for each of the red, green, and blue channels
+    /// Must be an array of CHANNELS integers
     pub limits: [u32; CHANNELS as usize],
-    pub iterations: u32,
+    /// Number of random samples to take, per channel, per pass
+    pub samples: u32,
+    #[serde(skip)]
     pub threads: Option<u32>,
+    /// Number of passes to run
     pub passes: u16,
-    pub width: u32,
-    pub height: u32,
+    /// Resolution of the rendered image (size × size pixels)
+    pub size: u32,
+    /// Colour correction curve to apply (value between 0 and 1, raised to this power)
     pub curve: f64,
 }
 
 /// Default settings (Equivalent to selecting the default values in the configuration wizard)
 pub const DEFAULT_RENDER_SETTINGS: RenderSettings = RenderSettings {
     limits: [7_740, 2_580, 860],
-    width: 1 << 11,
-    height: 1 << 11,
-    iterations: 1_000_000,
+    size: 1 << 11,
+    samples: 1_000_000,
     threads: None,
     passes: 100,
     curve: 0.5,
@@ -39,7 +44,7 @@ impl fmt::Display for RenderSettings {
             self.limits[0],
             self.limits[1],
             self.limits[2],
-            self.iterations,
+            self.samples,
             self.passes,
             match self.threads {
                 None => String::from(""),
@@ -47,8 +52,8 @@ impl fmt::Display for RenderSettings {
                     format!("Threads:\t\t{threads}\n")
                 }
             },
-            self.width,
-            self.height,
+            self.size,
+            self.size,
             self.curve,
         )
     }
@@ -152,11 +157,10 @@ impl RenderSettings {
 
         let settings = RenderSettings {
             limits,
-            iterations,
+            samples: iterations,
             threads: Some(threads),
             passes: DEFAULT_RENDER_SETTINGS.passes,
-            width: resolution,
-            height: resolution,
+            size: resolution,
             curve: DEFAULT_RENDER_SETTINGS.curve,
         };
 

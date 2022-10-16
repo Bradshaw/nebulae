@@ -104,7 +104,7 @@ where
         Some(progress_bars) => Arc::clone(&progress_bars),
     };
 
-    let mut raw_image = RawImage::new(settings.width, settings.height);
+    let mut raw_image = RawImage::new(settings.size, settings.size);
     let main_progress = progress_bars.add(ProgressBar::new(settings.passes.into()));
     main_progress.set_style(progress_bar_style.clone());
     main_progress.set_message(format!("Rendering..."));
@@ -123,7 +123,7 @@ where
 
         for thread in 0..threads {
             let thread_progress =
-                progress_bars.add(ProgressBar::new((settings.iterations * CHANNELS) as u64));
+                progress_bars.add(ProgressBar::new((settings.samples * CHANNELS) as u64));
             thread_progress.set_style(progress_bar_style.clone());
             thread_progress.set_message(format!("Thread {thread}"));
             let transfer = transfer.clone();
@@ -133,7 +133,7 @@ where
                     thread_progress.tick();
                     let mut zss: Vec<Complex> = Vec::new();
                     let limit = settings.limits[channel as usize];
-                    let sampler = JitterSampler::new(settings.iterations);
+                    let sampler = JitterSampler::new(settings.samples);
                     for (iteration, x, y) in sampler {
                         let z = Complex { re: 0.0, im: 0.0 };
                         let c = Complex {
@@ -144,8 +144,8 @@ where
                         if bailed {
                             zss.extend(zs);
                         }
-                        if iteration % (settings.iterations / 100) == 0 {
-                            thread_progress.inc((settings.iterations / 100) as u64);
+                        if iteration % (settings.samples / 100) == 0 {
+                            thread_progress.inc((settings.samples / 100) as u64);
                         }
                     }
                     transfer.send((thread, channel, zss)).unwrap();
@@ -168,8 +168,8 @@ where
                 .set_message(format!("Gathering channel {channel} from thread {thread}"));
             channel_progress.tick();
             for z in zs {
-                let x = f64_to_index(z.re, -2.0, 2.0, settings.width);
-                let y = f64_to_index(z.im, -2.0, 2.0, settings.height);
+                let x = f64_to_index(z.re, -2.0, 2.0, settings.size);
+                let y = f64_to_index(z.im, -2.0, 2.0, settings.size);
                 match x.zip(y) {
                     None => {}
                     Some((x, y)) => {
@@ -216,7 +216,7 @@ fn write_image(
         image_progress.inc(1);
         image_progress.set_message("Writing file");
         image_progress.tick();
-        match data_to_png(prep, settings.width as u32, settings.height as u32, path) {
+        match data_to_png(prep, settings.size as u32, settings.size as u32, path) {
             Ok(_) => {}
             Err(_) => {
                 return;
