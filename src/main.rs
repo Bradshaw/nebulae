@@ -1,6 +1,70 @@
 //! Render a beautiful Nebulabrot.
 //!
 //! The Nebulabrot is an alternate way to render the Mandelbrot set
+//!
+//! Output of calling `nebulae` without arguments:
+//! <div style="margin:auto;">
+//!     <img style="margin:auto;"
+//!         src="https://raw.githubusercontent.com/Bradshaw/nebulae/main/example.png"
+//!         alt="A render of a Nebulabrot. A nebulous-looking version of a Mandelbrot fractal."
+//!     >
+//! </div>
+//!
+//! # Usage:
+//!
+//! When installed via `cargo install` as `nebulae`:
+//! ```text
+//! USAGE:
+//!     nebulae [OPTIONS] [SUBCOMMAND]
+//!
+//! OPTIONS:
+//!     -c, --config <CONFIG>     Configuration file
+//!     -h, --help                Print help information
+//!     -n, --no-intermediates    Do not write intermediate files
+//!     -o, --output <OUTPUT>     File to write to [default: image.png]
+//!     -V, --version             Print version information
+//!
+//! SUBCOMMANDS:
+//!     help             Print this message or the help of the given subcommand(s)
+//!     wizard           Display configuration wizard
+//!     write-default    Write the default configuration to TOML
+//! ```
+//!
+//! ## Subcommands:
+//!
+//! ### `nebulae wizard`
+//! ```text
+//! Display configuration wizard
+//!
+//! USAGE:
+//!     nebulae wizard [OPTIONS]
+//!
+//! OPTIONS:
+//!     -h, --help                         Print help information
+//! ```
+//!
+//! ### `nebulae write-default`
+//! ```text
+//! Write the default configuration to TOML
+//!
+//! USAGE:
+//!     nebulae write-default [OPTIONS]
+//!
+//! OPTIONS:
+//!     -h, --help                         Print help information
+//!     -s, --save-config <SAVE_CONFIG>    Path to write the default configuration to (writes to stdout
+//! ```
+//!
+//! ## Recipes:
+//!
+//! * Just render a Nebulabrot with default settings:
+//!     * `nebulae`
+//! * Render a Nebulabrot using a configuration file:
+//!     * `nebulae my_config.toml`
+//! * Use the wizard to render a custom Nebulabrot, and save the configuration for future use:
+//!     * `nebulae wizard -c my_config.toml`
+//! * Render a default Nebulabrot with a custom filename:
+//!     * `nebulae -o my_render.png`
 
 use crate::mandelbrot::Complex;
 use crate::program_options::ProgramOptions;

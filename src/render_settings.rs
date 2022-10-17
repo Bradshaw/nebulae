@@ -60,7 +60,7 @@ impl fmt::Display for RenderSettings {
 }
 
 impl RenderSettings {
-    /// Serializes and writes the configuration in TOML format
+    /// Serializes and writes the configuration in TOML format to a file
     pub fn to_file(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
         fs::write(path, self.serialize()?)?;
         Ok(())
