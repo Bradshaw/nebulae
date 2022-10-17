@@ -198,7 +198,7 @@ where
                     let mut zss: Vec<Complex> = Vec::new();
                     let limit = settings.limits[channel as usize];
                     let sampler = JitterSampler::new(settings.samples);
-                    for (iteration, x, y) in sampler {
+                    for (iteration, (x, y)) in sampler.enumerate() {
                         let z = Complex { re: 0.0, im: 0.0 };
                         let c = Complex {
                             re: x * 5.0 - 2.5,
@@ -208,7 +208,7 @@ where
                         if bailed {
                             zss.extend(zs);
                         }
-                        if iteration % (settings.samples / 100) == 0 {
+                        if iteration % (settings.samples / 100) as usize == 0 {
                             thread_progress.inc((settings.samples / 100) as u64);
                         }
                     }

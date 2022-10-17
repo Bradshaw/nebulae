@@ -40,7 +40,7 @@ impl JitterSampler {
 }
 
 impl Iterator for JitterSampler {
-    type Item = (u32, f64, f64);
+    type Item = (f64, f64);
 
     fn next(&mut self) -> Option<Self::Item> {
         let item = if self.count < self.size * self.size {
@@ -48,12 +48,11 @@ impl Iterator for JitterSampler {
             let y = self.count / self.size;
 
             Some((
-                self.count,
                 self.width * (self.rng.gen::<f64>() + x as f64),
                 self.height * (self.rng.gen::<f64>() + y as f64),
             ))
         } else if self.count < self.samples {
-            Some((self.count, self.rng.gen::<f64>(), self.rng.gen::<f64>()))
+            Some((self.rng.gen::<f64>(), self.rng.gen::<f64>()))
         } else {
             None
         };
