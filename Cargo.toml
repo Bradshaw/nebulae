@@ -1,10 +1,18 @@
 [package]
 name = "nebulae"
 description = "A multi-threaded Nebulabrot renderer."
+repository = "https://github.com/Bradshaw/nebulae"
+homepage = "https://github.com/Bradshaw/nebulae"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "NPOSL-3.0"
+keywords = ["image", "cli", "rendering", "fractal", "mandelbrot"]
+categories = ["mathematics", "graphics", "multimedia::images", "rendering", "visualization", "command-line-utilities"]
+include = ["/src", "README.md", "default.toml"]
+
+[profile.release]
+lto = true
 
 [dependencies]
 rand = "0.8.5"
