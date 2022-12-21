@@ -10,12 +10,14 @@
 //! comparison.
 
 use rand::prelude::ThreadRng;
+use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
 
 /// An iterator for jittered random 2D points over a unit square
 pub struct JitterSampler {
     samples: u32,
     count: u32,
+    count_order: Vec<u32>,
     size: u32,
     width: f64,
     height: f64,
@@ -31,11 +33,21 @@ impl JitterSampler {
         JitterSampler {
             samples,
             count: 0,
+            count_order: (0..samples).collect::<Vec<u32>>(),
             size,
             width: 1.0 / (size as f64),
             height: 1.0 / (size as f64),
             rng: thread_rng(),
         }
+    }
+
+    pub fn shuffle(&mut self) -> &JitterSampler {
+        self.count_order.shuffle(&mut self.rng);
+        self
+    }
+
+    pub fn index(&self) -> u32 {
+        self.count_order[(self.count % self.samples) as usize]
     }
 }
 
@@ -43,21 +55,26 @@ impl Iterator for JitterSampler {
     type Item = (f64, f64);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let item = if self.count < self.size * self.size {
-            let x = self.count % self.size;
-            let y = self.count / self.size;
+        let index = self.index();
+        let item = if self.count >= self.samples {
+            None
+        } else if index < self.size * self.size {
+            let x = index % self.size;
+            let y = index / self.size;
 
             Some((
                 self.width * (self.rng.gen::<f64>() + x as f64),
                 self.height * (self.rng.gen::<f64>() + y as f64),
             ))
-        } else if self.count < self.samples {
-            Some((self.rng.gen::<f64>(), self.rng.gen::<f64>()))
         } else {
-            None
+            Some((self.rng.gen::<f64>(), self.rng.gen::<f64>()))
         };
         self.count += 1;
         item
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.samples as usize, Some(self.samples as usize))
     }
 }
 
