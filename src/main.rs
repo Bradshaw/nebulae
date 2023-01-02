@@ -78,7 +78,7 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::num::NonZeroU32;
 use std::path::Path;
-use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
 use tqdm::tqdm;
@@ -131,21 +131,23 @@ fn render_nebulabrot<F>(
 where
     F: Fn(&Vec<u32>, u32),
 {
-    let mut raw_image = RawImage::new(settings.size, settings.size);
+    let raw_image = RawImage::new(settings.size, settings.size);
+
+    let mutex_image: Arc<Mutex<RawImage>> = Arc::new(Mutex::new(raw_image));
 
     for _pass in tqdm(1..settings.passes + 1) {
         let mut handles = vec![];
-        let (transfer, receive) = mpsc::channel();
 
-        for thread in 0..threads {
-            let transfer = transfer.clone();
-            let handle = thread::spawn(move || {
-                for channel in tqdm(0..CHANNELS) {
-                    let mut zss: Vec<Complex> = Vec::new();
+        for _ in 0..threads {
+            for channel in 0..CHANNELS {
+                let mutex_image = mutex_image.clone();
+                let handle = thread::spawn(move || {
+                    let mut xys: Vec<(usize, usize)> = Vec::new();
                     let limit = settings.limits[channel as usize];
                     let mut sampler = JitterSampler::new(settings.samples);
                     sampler.shuffle();
-                    for (_iteration, (x, y)) in tqdm(sampler.enumerate()) {
+                    let progress = tqdm(sampler.enumerate());
+                    for (_iteration, (x, y)) in progress {
                         let z = Complex { re: 0.0, im: 0.0 };
                         let c = Complex {
                             re: x * 5.0 - 2.5,
@@ -153,35 +155,49 @@ where
                         };
                         let (zs, bailed) = mandelbrot::iterate(z, c, limit, 2.0, 3.0);
                         if bailed {
-                            zss.extend(zs);
+                            for z in zs {
+                                let x = f64_to_index(z.re, -2.0, 2.0, settings.size);
+                                let y = f64_to_index(z.im, -2.0, 2.0, settings.size);
+                                match x.zip(y) {
+                                    None => {}
+                                    Some((x, y)) => {
+                                        xys.push((x, y));
+                                    }
+                                }
+                            }
                         }
                     }
-                    transfer.send((thread, channel, zss)).unwrap();
-                }
-            });
-            handles.push(handle);
+                    let mut lock = mutex_image.lock().expect("image is locked");
+                    for (x, y) in xys {
+                        lock.bump(x as u32, y as u32, channel);
+                    }
+                });
+                handles.push(handle);
+            }
         }
 
         for handle in handles {
             handle.join().unwrap();
         }
-        while let Ok((_thread, channel, zs)) = receive.try_recv() {
-            for z in tqdm(zs.into_iter()) {
-                let x = f64_to_index(z.re, -2.0, 2.0, settings.size);
-                let y = f64_to_index(z.im, -2.0, 2.0, settings.size);
-                match x.zip(y) {
-                    None => {}
-                    Some((x, y)) => {
-                        raw_image.bump(x as u32, y as u32, channel);
-                    }
-                }
-            }
-        }
+        // while let Ok((_thread, channel, zs)) = receive.try_recv() {
+        //     for z in tqdm(zs.into_iter()) {
+        //         let x = f64_to_index(z.re, -2.0, 2.0, settings.size);
+        //         let y = f64_to_index(z.im, -2.0, 2.0, settings.size);
+        //         match x.zip(y) {
+        //             None => {}
+        //             Some((x, y)) => {
+        //                 raw_image.bump(x as u32, y as u32, channel);
+        //             }
+        //         }
+        //     }
+        // }
         if let Some(intermediates) = intermediates {
-            intermediates(&raw_image.get_data(), raw_image.get_maximum());
+            let lock = mutex_image.lock().expect("image is locked");
+            intermediates(&lock.get_data(), lock.get_maximum());
         }
     }
-    Ok((raw_image.get_data(), raw_image.get_maximum()))
+    let lock = mutex_image.lock().expect("image is locked");
+    Ok((lock.get_data(), lock.get_maximum()))
 }
 
 fn write_image(

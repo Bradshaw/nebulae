@@ -78,6 +78,8 @@ impl Iterator for JitterSampler {
     }
 }
 
+impl ExactSizeIterator for JitterSampler {}
+
 // Integer "square root"
 fn squirt(n: u32) -> u32 {
     let sqrt = (n as f64).sqrt() as u32;
