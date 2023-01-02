@@ -178,7 +178,6 @@ where
                     for (x, y) in xys {
                         lock.bump(x as u32, y as u32, channel);
                     }
-                    clear();
                 });
                 handles.push(handle);
             }
