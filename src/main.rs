@@ -81,6 +81,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
+use tqdm::config::Style;
 use tqdm::tqdm;
 
 mod jitter_sampler;
@@ -91,6 +92,10 @@ mod render_settings;
 
 /// This program is hard-coded to output an RGB-encoded PNG file, so 3 channels are used throughout.
 const CHANNELS: u32 = 3;
+
+fn clear() {
+    print!("{}[2J", 27 as char);
+}
 
 /// Main function that will hopefully give you a nice picture by the end
 fn main() -> Result<(), Box<dyn Error>> {
@@ -135,6 +140,7 @@ where
 
     let mutex_image: Arc<Mutex<RawImage>> = Arc::new(Mutex::new(raw_image));
 
+    clear();
     for _pass in tqdm(1..settings.passes + 1) {
         let mut handles = vec![];
 
@@ -167,10 +173,12 @@ where
                             }
                         }
                     }
+                    clear();
                     let mut lock = mutex_image.lock().expect("image is locked");
                     for (x, y) in xys {
                         lock.bump(x as u32, y as u32, channel);
                     }
+                    clear();
                 });
                 handles.push(handle);
             }
@@ -179,23 +187,13 @@ where
         for handle in handles {
             handle.join().unwrap();
         }
-        // while let Ok((_thread, channel, zs)) = receive.try_recv() {
-        //     for z in tqdm(zs.into_iter()) {
-        //         let x = f64_to_index(z.re, -2.0, 2.0, settings.size);
-        //         let y = f64_to_index(z.im, -2.0, 2.0, settings.size);
-        //         match x.zip(y) {
-        //             None => {}
-        //             Some((x, y)) => {
-        //                 raw_image.bump(x as u32, y as u32, channel);
-        //             }
-        //         }
-        //     }
-        // }
+
         if let Some(intermediates) = intermediates {
             let lock = mutex_image.lock().expect("image is locked");
             intermediates(&lock.get_data(), lock.get_maximum());
         }
     }
+    clear();
     let lock = mutex_image.lock().expect("image is locked");
     Ok((lock.get_data(), lock.get_maximum()))
 }
