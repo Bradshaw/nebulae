@@ -9,9 +9,9 @@
 //! Jittered sampling has fewer guarantees, but is extremely cheap and simple to implement in
 //! comparison.
 
-use rand::prelude::ThreadRng;
+use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
-use rand::{thread_rng, Rng};
+use rand::{Rng, SeedableRng};
 
 /// An iterator for jittered random 2D points over a unit square
 pub struct JitterSampler {
@@ -21,7 +21,7 @@ pub struct JitterSampler {
     size: u32,
     width: f64,
     height: f64,
-    rng: ThreadRng,
+    rng: StdRng,
 }
 
 impl JitterSampler {
@@ -37,7 +37,7 @@ impl JitterSampler {
             size,
             width: 1.0 / (size as f64),
             height: 1.0 / (size as f64),
-            rng: thread_rng(),
+            rng: StdRng::from_entropy(),
         }
     }
 
