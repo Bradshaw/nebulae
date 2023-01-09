@@ -81,7 +81,6 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
-use tqdm::config::Style;
 use tqdm::tqdm;
 
 mod jitter_sampler;
