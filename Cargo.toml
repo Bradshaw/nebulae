@@ -3,7 +3,7 @@ name = "nebulae"
 description = "A multi-threaded Nebulabrot renderer."
 repository = "https://github.com/Bradshaw/nebulae"
 homepage = "https://github.com/Bradshaw/nebulae"
-version = "1.0.0"
+version = "2.0.0"
 edition = "2021"
 
 license = "NPOSL-3.0"
