@@ -70,20 +70,21 @@ use crate::mandelbrot::Complex;
 use crate::program_options::ProgramOptions;
 use crate::raw_image::RawImage;
 use crate::render_settings::*;
+use console::style;
 use dialoguer::console::Term;
-use jitter_sampler::JitterSampler;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use rand::Rng;
+use rayon::prelude::*;
 use std::cmp::min;
 use std::error::Error;
 use std::fs::File;
 use std::io::BufWriter;
-use std::num::NonZeroU32;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
-use tqdm::tqdm;
+use std::time::{Duration, Instant};
 
-mod jitter_sampler;
 mod mandelbrot;
 mod program_options;
 mod raw_image;
@@ -91,10 +92,6 @@ mod render_settings;
 
 /// This program is hard-coded to output an RGB-encoded PNG file, so 3 channels are used throughout.
 const CHANNELS: u32 = 3;
-
-fn clear() {
-    print!("{}[2J", 27 as char);
-}
 
 /// Main function that will hopefully give you a nice picture by the end
 fn main() -> Result<(), Box<dyn Error>> {
@@ -104,11 +101,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         render_intermediates,
     } = program_options::get_options()?;
 
-    let threads = match render_settings.threads {
-        None => NonZeroU32::try_from(thread::available_parallelism()?)?.get(),
-        Some(threads) => threads,
-    };
-
     let intermediate_function = if render_intermediates {
         Some(|data: &Vec<u32>, maximum: u32| {
             write_image(render_settings, &output_path, &data, maximum);
@@ -117,83 +109,79 @@ fn main() -> Result<(), Box<dyn Error>> {
         None
     };
 
-    let (data, maximum) = render_nebulabrot(render_settings, threads, &intermediate_function)?;
+    let (data, maximum) = render_nebulabrot(render_settings, &intermediate_function)?;
 
     write_image(render_settings, &output_path, &data, maximum)
         .join()
-        .expect("Problem writing data to file");
+        .unwrap();
     Ok(())
 }
 
-/// Render a Nebulabrot on multiple threads
-/// Returns a vector of values that represent an RGB-encoded grid of
+/// Render a Nebulabrot
+/// Returns a vector of values that represent an RGB-encoded grid
 fn render_nebulabrot<F>(
     settings: RenderSettings,
-    threads: u32,
     intermediates: &Option<F>,
 ) -> Result<(Vec<u32>, u32), Box<dyn Error>>
 where
     F: Fn(&Vec<u32>, u32),
 {
-    let raw_image = RawImage::new(settings.size, settings.size);
+    let template = format!(
+        "{{spinner:.reverse}}{{wide_bar}}{}",
+        style(" {elapsed:<4} {percent:>4}% ").reverse()
+    );
+    let m = MultiProgress::new();
+    let sty = ProgressStyle::with_template(template.as_str())
+        .unwrap()
+        .progress_chars("██▉▊▋▌▍▎▏ ");
 
-    let mutex_image: Arc<Mutex<RawImage>> = Arc::new(Mutex::new(raw_image));
+    let pb = m.add(ProgressBar::new(settings.passes as u64));
+    pb.set_style(sty.clone());
+    pb.enable_steady_tick(Duration::from_millis(100));
 
-    clear();
-    for _pass in tqdm(1..settings.passes + 1) {
-        let mut handles = vec![];
+    let raw_image = Arc::new(RawImage::new(settings.size, settings.size));
 
-        for _ in 0..threads {
-            for channel in 0..CHANNELS {
-                let mutex_image = mutex_image.clone();
-                let handle = thread::spawn(move || {
-                    let mut xys: Vec<(usize, usize)> = Vec::new();
-                    let limit = settings.limits[channel as usize];
-                    let mut sampler = JitterSampler::new(settings.samples);
-                    sampler.shuffle();
-                    let progress = tqdm(sampler.enumerate());
-                    for (_iteration, (x, y)) in progress {
-                        let z = Complex { re: 0.0, im: 0.0 };
-                        let c = Complex {
-                            re: x * 5.0 - 2.5,
-                            im: y * 5.0 - 2.5,
-                        };
-                        let (zs, bailed) = mandelbrot::iterate(z, c, limit, 2.0, 3.0);
-                        if bailed {
-                            for z in zs {
-                                let x = f64_to_index(z.re, -2.0, 2.0, settings.size);
-                                let y = f64_to_index(z.im, -2.0, 2.0, settings.size);
-                                match x.zip(y) {
-                                    None => {}
-                                    Some((x, y)) => {
-                                        xys.push((x, y));
-                                    }
-                                }
+    let mut last_render = Instant::now();
+
+    for _pass in 0..settings.passes {
+        let pb2 = m.insert_after(&pb, ProgressBar::new((CHANNELS * settings.samples) as u64));
+        pb2.set_style(sty.clone());
+        pb2.enable_steady_tick(Duration::from_millis(100));
+        (0..CHANNELS).into_par_iter().for_each(|channel| {
+            (0..settings.samples).into_par_iter().for_each(|_| {
+                pb2.inc(1);
+                let mut rng = rand::thread_rng();
+                let limit = settings.limits[channel as usize];
+                let z = Complex { re: 0.0, im: 0.0 };
+                let c = Complex {
+                    re: rng.gen::<f64>() * 5.0 - 2.5,
+                    im: rng.gen::<f64>() * 5.0 - 2.5,
+                };
+                let (zs, bailed) = mandelbrot::iterate(z, c, limit, 2.0, 3.0);
+                if bailed {
+                    for z in zs {
+                        let x = f64_to_index(z.re, -2.0, 2.0, settings.size);
+                        let y = f64_to_index(z.im, -2.0, 2.0, settings.size);
+                        match x.zip(y) {
+                            None => {}
+                            Some((x, y)) => {
+                                raw_image.bump(x as u32, y as u32, channel);
                             }
                         }
                     }
-                    clear();
-                    let mut lock = mutex_image.lock().expect("image is locked");
-                    for (x, y) in xys {
-                        lock.bump(x as u32, y as u32, channel);
-                    }
-                });
-                handles.push(handle);
+                }
+            });
+        });
+
+        pb.inc(1);
+        if last_render.elapsed() >= Duration::from_secs(60) {
+            if let Some(intermediates) = intermediates {
+                intermediates(&raw_image.get_data(), raw_image.get_maximum());
+                last_render = Instant::now();
             }
         }
-
-        for handle in handles {
-            handle.join().unwrap();
-        }
-
-        if let Some(intermediates) = intermediates {
-            let lock = mutex_image.lock().expect("image is locked");
-            intermediates(&lock.get_data(), lock.get_maximum());
-        }
     }
-    clear();
-    let lock = mutex_image.lock().expect("image is locked");
-    Ok((lock.get_data(), lock.get_maximum()))
+    Ok((raw_image.get_data(), raw_image.get_maximum()))
 }
 
 fn write_image(
@@ -207,12 +195,8 @@ fn write_image(
     thread::spawn(move || {
         let path = Path::new(output_path.as_str());
         let prep = map_to_color(data, maximum, settings.curve);
-        match data_to_png(prep, settings.size as u32, settings.size as u32, path) {
-            Ok(_) => {}
-            Err(_) => {
-                return;
-            }
-        };
+        data_to_png(prep, settings.size as u32, settings.size as u32, path)
+            .expect("data to be saved as png");
     })
 }
 

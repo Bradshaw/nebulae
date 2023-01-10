@@ -5,8 +5,7 @@ use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, Select};
 use serde::{Deserialize, Serialize};
 use std::io::Error;
-use std::num::NonZeroU32;
-use std::{fmt, fs, thread};
+use std::{fmt, fs};
 
 /// Configuration Settings for the main function
 #[derive(Serialize, Deserialize, Clone, Copy)]
@@ -16,8 +15,6 @@ pub struct RenderSettings {
     pub limits: [u32; CHANNELS as usize],
     /// Number of random samples to take, per channel, per pass
     pub samples: u32,
-    #[serde(skip)]
-    pub threads: Option<u32>,
     /// Number of passes to run
     pub passes: u16,
     /// Resolution of the rendered image (size × size pixels)
@@ -31,7 +28,6 @@ pub const DEFAULT_RENDER_SETTINGS: RenderSettings = RenderSettings {
     limits: [7_740, 2_580, 860],
     size: 1 << 11,
     samples: 1_000_000,
-    threads: None,
     passes: 100,
     curve: 0.5,
 };
@@ -40,18 +36,12 @@ impl fmt::Display for RenderSettings {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Escape limits:\t{},{},{}\nRuns per pass:\t{}\nPasses:\t\t{}\n{}Resolution:\t{}x{}\nCorrection\t{}",
+            "Escape limits:\t{},{},{}\nRuns per pass:\t{}\nPasses:\t\t{}\nResolution:\t{}x{}\nCorrection\t{}",
             self.limits[0],
             self.limits[1],
             self.limits[2],
             self.samples,
             self.passes,
-            match self.threads {
-                None => String::from(""),
-                Some(threads) => {
-                    format!("Threads:\t\t{threads}\n")
-                }
-            },
             self.size,
             self.size,
             self.curve,
@@ -79,8 +69,6 @@ impl RenderSettings {
 
     /// Generates a [`RenderSettings`] from a TUI in the terminal
     pub fn from_wizard() -> Result<Option<RenderSettings>, Box<dyn std::error::Error>> {
-        let threads = NonZeroU32::try_from(thread::available_parallelism()?)?.get();
-
         let color_palette = match select(
             "Palette",
             vec![
@@ -147,7 +135,8 @@ impl RenderSettings {
             vec![
                 ("Draft", &100_000),
                 ("Normal", &1_000_000),
-                ("Smooooth", &10_000_000),
+                ("High", &10_000_000),
+                ("Smooooth", &100_000_000),
             ],
             1,
         )? {
@@ -158,7 +147,6 @@ impl RenderSettings {
         let settings = RenderSettings {
             limits,
             samples: iterations,
-            threads: Some(threads),
             passes: DEFAULT_RENDER_SETTINGS.passes,
             size: resolution,
             curve: DEFAULT_RENDER_SETTINGS.curve,

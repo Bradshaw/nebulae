@@ -1,11 +1,12 @@
 use crate::CHANNELS;
-use std::cmp::max;
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering::SeqCst;
 
 /// A structure to hold unscaled, integer "photo-counting" style images.
 pub struct RawImage {
     height: u32,
-    data: Vec<u32>,
-    maximum: u32,
+    data: Vec<AtomicU32>,
+    maximum: AtomicU32,
 }
 
 impl RawImage {
@@ -13,26 +14,25 @@ impl RawImage {
     pub fn new(width: u32, height: u32) -> RawImage {
         RawImage {
             height,
-            data: vec![0; (width * height * CHANNELS) as usize],
-            maximum: 0,
+            data: vec![(); (width * height * CHANNELS) as usize].iter().map(|_| AtomicU32::new(0)).collect(),
+            maximum: AtomicU32::new(0),
         }
     }
 
     /// Increment the value of a given `channel` at `x` - `y` coordinates
-    pub fn bump(&mut self, x: u32, y: u32, channel: u32) -> Option<u32> {
+    pub fn bump(&self, x: u32, y: u32, channel: u32) {
         let index = ((x * self.height + y) * 3 + channel) as usize;
-        self.data[index] += 1;
-        self.maximum = max(self.maximum, self.data[index]);
-        Some(self.data[index])
+        let new_value = self.data[index].fetch_add(1, SeqCst);
+        self.maximum.fetch_max(new_value, SeqCst);
     }
 
     /// Get a copy of the internal data
     pub fn get_data(&self) -> Vec<u32> {
-        self.data.clone()
+        self.data.iter().map(|a| a.load(SeqCst)).collect()
     }
 
     /// Get the maximum value (brightest pixel)
     pub fn get_maximum(&self) -> u32 {
-        self.maximum
+        self.maximum.load(SeqCst)
     }
 }
